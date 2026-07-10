@@ -525,5 +525,178 @@
   /* ---- chapter card artwork (base64-embedded, edit above not here) ---- */
 
 </script>
+
+<!-- ===== SBS ANNOTATE — copy from here into your own pages ====== -->
+<!-- ===== (paste this whole block just before </body>) ========== -->
+<!-- ============================================================= -->
+<style>
+  #sbsAnnoCanvas{
+    position:absolute; top:0; left:0; z-index:2147482000;
+    touch-action:pan-x pan-y; pointer-events:none;
+  }
+  #sbsAnnoCanvas.on{ pointer-events:auto; }
+  #sbsAnnoCanvas.fingerdraw{ touch-action:none; }
+  #sbsAnnoBar{
+    position:fixed; left:50%; bottom:16px; transform:translateX(-50%);
+    z-index:2147483000; display:flex; gap:6px; align-items:center;
+    background:#071a44; padding:8px 10px; border-radius:14px;
+    box-shadow:0 6px 20px rgba(7,26,68,.35);
+    font-family:Inter,system-ui,sans-serif; user-select:none;
+  }
+  #sbsAnnoBar button, #sbsAnnoBar .swatch{
+    min-width:44px; height:44px; border:0; border-radius:10px; cursor:pointer;
+    font:600 13px Inter,sans-serif; color:#fff; background:#1B4F8A; padding:0 10px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #sbsAnnoBar button.active{ outline:2px solid #B8860B; outline-offset:1px; }
+  #sbsAnnoBar .swatch{ min-width:32px; width:32px; padding:0; border:2px solid rgba(255,255,255,.35); }
+  #sbsAnnoBar .swatch.active{ border-color:#fff; transform:scale(1.12); }
+  #sbsAnnoBar .sep{ width:1px; height:30px; background:rgba(255,255,255,.22); margin:0 2px; }
+  #sbsAnnoPower{ background:#8B1A1A; }
+  #sbsAnnoPower.live{ background:#137a3f; }
+</style>
+
+<canvas id="sbsAnnoCanvas"></canvas>
+<div id="sbsAnnoBar" aria-label="Annotation tools">
+  <button id="sbsAnnoPower" title="Turn pen on/off">Pen: off</button>
+  <span class="sep"></span>
+  <span class="swatch active" data-color="#8B1A1A" style="background:#8B1A1A" title="Crimson"></span>
+  <span class="swatch" data-color="#1B4F8A" style="background:#1B4F8A" title="Blue"></span>
+  <span class="swatch" data-color="#137a3f" style="background:#137a3f" title="Green"></span>
+  <span class="swatch" data-color="#B8860B" style="background:#B8860B" title="Gold"></span>
+  <span class="swatch" data-color="#111111" style="background:#111111" title="Black"></span>
+  <span class="sep"></span>
+  <button id="sbsAnnoHi" title="Highlighter">Hi-lite</button>
+  <button id="sbsAnnoErase" title="Eraser">Erase</button>
+  <button id="sbsAnnoUndo" title="Undo last stroke">Undo</button>
+  <button id="sbsAnnoClear" title="Clear everything">Clear</button>
+  <button id="sbsAnnoFinger" title="Let finger draw (for iPads with no Pencil)">✋</button>
+</div>
+
+<script>
+(function(){
+  var canvas = document.getElementById('sbsAnnoCanvas');
+  var ctx = canvas.getContext('2d');
+  var dpr = Math.max(1, window.devicePixelRatio || 1);
+
+  var state = {
+    on:false, tool:'pen', color:'#8B1A1A', fingerDraws:false,
+    drawing:false, strokes:[], current:null
+  };
+
+  function docSize(){
+    var d=document.documentElement, b=document.body;
+    return {
+      w: Math.max(d.scrollWidth, b?b.scrollWidth:0, window.innerWidth),
+      h: Math.max(d.scrollHeight, b?b.scrollHeight:0, window.innerHeight)
+    };
+  }
+  function resize(){
+    var s=docSize();
+    canvas.style.width=s.w+'px'; canvas.style.height=s.h+'px';
+    canvas.width=Math.floor(s.w*dpr); canvas.height=Math.floor(s.h*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    redraw();
+  }
+  function redraw(){
+    ctx.clearRect(0,0,canvas.width/dpr,canvas.height/dpr);
+    for(var i=0;i<state.strokes.length;i++) paint(state.strokes[i]);
+  }
+  function paint(st){
+    if(!st.pts.length) return;
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    if(st.tool==='erase'){ ctx.globalCompositeOperation='destination-out'; ctx.globalAlpha=1; ctx.lineWidth=28; }
+    else if(st.tool==='hi'){ ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=.32; ctx.lineWidth=20; ctx.strokeStyle=st.color; }
+    else { ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1; ctx.lineWidth=3.2; ctx.strokeStyle=st.color; }
+    ctx.beginPath(); ctx.moveTo(st.pts[0].x, st.pts[0].y);
+    for(var i=1;i<st.pts.length;i++) ctx.lineTo(st.pts[i].x, st.pts[i].y);
+    ctx.stroke();
+    ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1;
+  }
+
+  function shouldDraw(e){
+    if(!state.on) return false;
+    if(e.pointerType==='touch' && !state.fingerDraws) return false; // finger scrolls
+    return true;
+  }
+  function pt(e){ return {x:e.pageX, y:e.pageY}; }
+
+  canvas.addEventListener('pointerdown', function(e){
+    if(!shouldDraw(e)) return;
+    state.drawing=true;
+    state.current={tool:state.tool, color:state.color, pts:[pt(e)]};
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', function(e){
+    if(!state.drawing || !shouldDraw(e)) return;
+    state.current.pts.push(pt(e));
+    // draw just the last segment live
+    var p=state.current.pts, n=p.length;
+    if(n>=2){ paint({tool:state.current.tool, color:state.current.color, pts:[p[n-2],p[n-1]]}); }
+    e.preventDefault();
+  });
+  function endStroke(e){
+    if(!state.drawing) return;
+    state.drawing=false;
+    if(state.current && state.current.pts.length){ state.strokes.push(state.current); }
+    state.current=null;
+    redraw();
+  }
+  canvas.addEventListener('pointerup', endStroke);
+  canvas.addEventListener('pointercancel', endStroke);
+  canvas.addEventListener('pointerleave', endStroke);
+
+  // ---- toolbar ----
+  var bar=document.getElementById('sbsAnnoBar');
+  var power=document.getElementById('sbsAnnoPower');
+  function setActiveTool(id){
+    ['sbsAnnoHi','sbsAnnoErase'].forEach(function(x){ document.getElementById(x).classList.remove('active'); });
+    if(id) document.getElementById(id).classList.add('active');
+  }
+  power.addEventListener('click', function(){
+    state.on=!state.on;
+    canvas.classList.toggle('on', state.on);
+    power.textContent='Pen: '+(state.on?'on':'off');
+    power.classList.toggle('live', state.on);
+  });
+  bar.querySelectorAll('.swatch').forEach(function(sw){
+    sw.addEventListener('click', function(){
+      bar.querySelectorAll('.swatch').forEach(function(s){s.classList.remove('active');});
+      sw.classList.add('active');
+      state.color=sw.getAttribute('data-color');
+      state.tool='pen'; setActiveTool(null);
+    });
+  });
+  document.getElementById('sbsAnnoHi').addEventListener('click', function(){
+    state.tool = state.tool==='hi' ? 'pen' : 'hi';
+    setActiveTool(state.tool==='hi'?'sbsAnnoHi':null);
+  });
+  document.getElementById('sbsAnnoErase').addEventListener('click', function(){
+    state.tool = state.tool==='erase' ? 'pen' : 'erase';
+    setActiveTool(state.tool==='erase'?'sbsAnnoErase':null);
+  });
+  document.getElementById('sbsAnnoUndo').addEventListener('click', function(){
+    state.strokes.pop(); redraw();
+  });
+  document.getElementById('sbsAnnoClear').addEventListener('click', function(){
+    state.strokes=[]; redraw();
+  });
+  var finger=document.getElementById('sbsAnnoFinger');
+  finger.addEventListener('click', function(){
+    state.fingerDraws=!state.fingerDraws;
+    finger.classList.toggle('active', state.fingerDraws);
+    canvas.classList.toggle('fingerdraw', state.fingerDraws);
+  });
+
+  // keep canvas sized to the page (content can grow after load)
+  window.addEventListener('load', resize);
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', function(){ setTimeout(resize,300); });
+  if('ResizeObserver' in window){ new ResizeObserver(function(){ resize(); }).observe(document.body); }
+  resize();
+})();
+</script>
+<!-- ============================================================= -->
+<!-- ===== end SBS ANNOTATE block ================================ -->
 </body>
 </html>
