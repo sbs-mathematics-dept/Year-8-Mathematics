@@ -526,13 +526,9 @@
 
 </script>
 
-<!--SBS_ANNO_START--><!-- SBS Annotate pen tool — compact single-line, no save. -->
+<!--SBS_ANNO_START--><!-- SBS Annotate pen tool — Pencil-only capture, finger always reaches the page. No save. -->
 <style>
-  #sbsAnnoCanvas{ position:absolute; top:0; left:0; z-index:2147482000;
-    touch-action:pan-x pan-y; pointer-events:none; }
-  #sbsAnnoCanvas.on{ pointer-events:auto; }
-  #sbsAnnoCanvas.fingerdraw{ touch-action:none; }
-
+  #sbsAnnoCanvas{ position:absolute; top:0; left:0; z-index:2147482000; pointer-events:none; }
   #sbsAnnoBar{
     position:fixed; left:50%; bottom:12px; transform:translateX(-50%);
     z-index:2147483000; display:flex; flex-wrap:nowrap; gap:4px; align-items:center;
@@ -550,29 +546,20 @@
     border:1px solid rgba(255,255,255,.38); border-radius:10px; cursor:pointer; color:#fff;
     background:linear-gradient(160deg, rgba(255,255,255,.30), rgba(255,255,255,.07));
     box-shadow:inset 0 1px 0 rgba(255,255,255,.6), 0 2px 7px rgba(20,30,80,.16);
-    display:flex; align-items:center; justify-content:center;
-    -webkit-tap-highlight-color:transparent;
+    display:flex; align-items:center; justify-content:center; -webkit-tap-highlight-color:transparent;
   }
   #sbsAnnoBar .sbsBtn svg{ width:19px; height:19px; display:block; }
-  #sbsAnnoBar .sbsBtn.active{
-    outline:2px solid #FFD24A; outline-offset:1px;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.6), 0 0 12px rgba(255,210,74,.65);
-  }
+  #sbsAnnoBar .sbsBtn.active{ outline:2px solid #FFD24A; outline-offset:1px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.6), 0 0 12px rgba(255,210,74,.65); }
   #sbsAnnoBar .sbsSw{
     width:26px; min-width:26px; height:36px; flex:0 0 auto; border-radius:9px; cursor:pointer; padding:0;
     border:1px solid rgba(255,255,255,.55);
-    box-shadow:inset 0 2px 4px rgba(255,255,255,.55), inset 0 -6px 10px rgba(0,0,0,.20),
-               0 2px 7px rgba(20,30,80,.16);
-    -webkit-tap-highlight-color:transparent;
-  }
+    box-shadow:inset 0 2px 4px rgba(255,255,255,.55), inset 0 -6px 10px rgba(0,0,0,.20), 0 2px 7px rgba(20,30,80,.16);
+    -webkit-tap-highlight-color:transparent; }
   #sbsAnnoBar .sbsSw.active{ outline:3px solid #fff; outline-offset:1px; transform:translateY(-2px); }
   #sbsAnnoBar .sbsSep{ width:1px; height:26px; flex:0 0 auto; margin:0 1px; background:rgba(255,255,255,.42); }
-  #sbsAnnoPower{ width:auto; min-width:44px; padding:0 9px; font:700 12px Inter,system-ui,sans-serif;
-    text-shadow:0 1px 2px rgba(0,0,0,.35); }
-  #sbsAnnoPower.live{
-    background:linear-gradient(160deg, rgba(120,240,170,.6), rgba(30,180,110,.4));
-    border-color:rgba(180,255,210,.75);
-  }
+  #sbsAnnoPower{ width:auto; min-width:44px; padding:0 9px; font:700 12px Inter,system-ui,sans-serif; text-shadow:0 1px 2px rgba(0,0,0,.35); }
+  #sbsAnnoPower.live{ background:linear-gradient(160deg, rgba(120,240,170,.6), rgba(30,180,110,.4)); border-color:rgba(180,255,210,.75); }
 </style>
 
 <canvas id="sbsAnnoCanvas"></canvas>
@@ -597,8 +584,6 @@
   <button class="sbsBtn" id="sbsAnnoClear" title="Clear everything">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M6 6v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6"/></svg>
   </button>
-  <span class="sbsSep"></span>
-  <button class="sbsBtn" id="sbsAnnoFinger" title="Let your finger draw (for iPads with no Apple Pencil)"><span style="font-size:17px;line-height:1">✋</span></button>
 </div>
 
 <script>
@@ -609,7 +594,8 @@
   if(!canvas) return;
   var ctx = canvas.getContext('2d');
   var dpr = Math.max(1, window.devicePixelRatio || 1);
-  var S = { on:false, tool:'pen', color:'#E23B3B', fingerDraws:false, drawing:false, strokes:[], current:null };
+  var S = { on:false, tool:'pen', color:'#E23B3B', drawing:false, current:null, strokes:[] };
+  var swallowClick = false;
 
   function docSize(){
     var d=document.documentElement, b=document.body;
@@ -633,27 +619,55 @@
     for(var i=1;i<st.pts.length;i++) ctx.lineTo(st.pts[i].x, st.pts[i].y);
     ctx.stroke(); ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1;
   }
-  function drawable(e){ if(!S.on) return false; if(e.pointerType==='touch' && !S.fingerDraws) return false; return true; }
   function pt(e){ return {x:e.pageX, y:e.pageY}; }
 
-  canvas.addEventListener('pointerdown', function(e){ if(!drawable(e)) return; S.drawing=true; S.current={tool:S.tool,color:S.color,pts:[pt(e)]}; e.preventDefault(); });
-  canvas.addEventListener('pointermove', function(e){ if(!S.drawing||!drawable(e)) return; S.current.pts.push(pt(e)); var p=S.current.pts,n=p.length; if(n>=2) paint({tool:S.current.tool,color:S.current.color,pts:[p[n-2],p[n-1]]}); e.preventDefault(); });
-  function endStroke(){ if(!S.drawing) return; S.drawing=false; if(S.current&&S.current.pts.length) S.strokes.push(S.current); S.current=null; redraw(); }
-  canvas.addEventListener('pointerup', endStroke);
-  canvas.addEventListener('pointercancel', endStroke);
-  canvas.addEventListener('pointerleave', endStroke);
+  // Only the Apple Pencil (pointerType 'pen') or a mouse draws. Finger ('touch')
+  // is never captured, so taps and scrolling always reach the page underneath.
+  function startable(e){
+    if(!S.on) return false;
+    if(e.pointerType==='touch') return false;
+    if(e.target && e.target.closest && e.target.closest('#sbsAnnoBar')) return false;
+    return true;
+  }
+  function down(e){
+    if(!startable(e)) return;
+    S.drawing=true; S.current={tool:S.tool, color:S.color, pts:[pt(e)]};
+    swallowClick=true; e.preventDefault();
+  }
+  function move(e){
+    if(!S.drawing || e.pointerType==='touch') return;
+    S.current.pts.push(pt(e));
+    var p=S.current.pts, n=p.length;
+    if(n>=2) paint({tool:S.current.tool, color:S.current.color, pts:[p[n-2],p[n-1]]});
+    e.preventDefault();
+  }
+  function up(){ if(!S.drawing) return; S.drawing=false; if(S.current && S.current.pts.length) S.strokes.push(S.current); S.current=null; redraw(); }
+  window.addEventListener('pointerdown', down, {capture:true, passive:false});
+  window.addEventListener('pointermove', move, {capture:true, passive:false});
+  window.addEventListener('pointerup', up, {capture:true});
+  window.addEventListener('pointercancel', up, {capture:true});
+  // stop the Pencil's own tap from also triggering page controls while drawing
+  window.addEventListener('click', function(e){ if(swallowClick){ e.preventDefault(); e.stopPropagation(); swallowClick=false; } }, {capture:true});
+
+  // Fix deck tap-to-advance stealing reveal-card taps: the deck skips advancing
+  // when the click's default was prevented, so we preventDefault on interactive
+  // widgets (reveal cards, tiles, chips, drop-zones, flip cards). The widgets'
+  // own reveal/toggle handlers still run — preventDefault doesn't stop them.
+  var SBS_NOADV='.rcard,.tile,.chip,.chipm,.dz,.flip,[data-reveal],[data-match]';
+  window.addEventListener('click', function(e){
+    var t=e.target;
+    if(t && t.closest && t.closest(SBS_NOADV)) e.preventDefault();
+  }, {capture:true});
 
   var bar=document.getElementById('sbsAnnoBar');
   var power=document.getElementById('sbsAnnoPower');
   function clearToolActive(){ ['sbsAnnoHi','sbsAnnoErase'].forEach(function(x){ document.getElementById(x).classList.remove('active'); }); }
-  power.addEventListener('click', function(){ S.on=!S.on; canvas.classList.toggle('on',S.on); power.classList.toggle('live',S.on); power.title = S.on?'Pen is ON — tap to turn off':'Pen is off — tap to turn on'; });
+  power.addEventListener('click', function(){ S.on=!S.on; power.classList.toggle('live',S.on); power.title = S.on?'Pen is ON — tap to turn off':'Pen is off — tap to turn on'; });
   bar.querySelectorAll('.sbsSw').forEach(function(sw){ sw.addEventListener('click', function(){ bar.querySelectorAll('.sbsSw').forEach(function(s){s.classList.remove('active');}); sw.classList.add('active'); S.color=sw.getAttribute('data-color'); S.tool='pen'; clearToolActive(); }); });
   document.getElementById('sbsAnnoHi').addEventListener('click', function(){ S.tool=S.tool==='hi'?'pen':'hi'; clearToolActive(); if(S.tool==='hi') this.classList.add('active'); });
   document.getElementById('sbsAnnoErase').addEventListener('click', function(){ S.tool=S.tool==='erase'?'pen':'erase'; clearToolActive(); if(S.tool==='erase') this.classList.add('active'); });
   document.getElementById('sbsAnnoUndo').addEventListener('click', function(){ S.strokes.pop(); redraw(); });
   document.getElementById('sbsAnnoClear').addEventListener('click', function(){ S.strokes=[]; redraw(); });
-  var finger=document.getElementById('sbsAnnoFinger');
-  finger.addEventListener('click', function(){ S.fingerDraws=!S.fingerDraws; finger.classList.toggle('active',S.fingerDraws); canvas.classList.toggle('fingerdraw',S.fingerDraws); });
 
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', function(){ setTimeout(resize,300); });
