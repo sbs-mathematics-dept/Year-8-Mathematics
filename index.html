@@ -584,6 +584,8 @@
   <button class="sbsBtn" id="sbsAnnoClear" title="Clear everything">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M6 6v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6"/></svg>
   </button>
+  <span class="sbsSep"></span>
+  <button class="sbsBtn" id="sbsAnnoFinger" title="Finger draw on/off — turn on to write with your finger, off to tap and scroll"><span style="font-size:17px;line-height:1">✋</span></button>
 </div>
 
 <script>
@@ -594,7 +596,7 @@
   if(!canvas) return;
   var ctx = canvas.getContext('2d');
   var dpr = Math.max(1, window.devicePixelRatio || 1);
-  var S = { on:false, tool:'pen', color:'#E23B3B', drawing:false, current:null, strokes:[] };
+  var S = { on:false, tool:'pen', color:'#E23B3B', fingerDraws:false, drawing:false, current:null, strokes:[] };
   var swallowClick = false;
 
   function docSize(){
@@ -625,7 +627,7 @@
   // is never captured, so taps and scrolling always reach the page underneath.
   function startable(e){
     if(!S.on) return false;
-    if(e.pointerType==='touch') return false;
+    if(e.pointerType==='touch' && !S.fingerDraws) return false;
     if(e.target && e.target.closest && e.target.closest('#sbsAnnoBar')) return false;
     return true;
   }
@@ -635,7 +637,7 @@
     swallowClick=true; e.preventDefault();
   }
   function move(e){
-    if(!S.drawing || e.pointerType==='touch') return;
+    if(!S.drawing) return; if(e.pointerType==='touch' && !S.fingerDraws) return;
     S.current.pts.push(pt(e));
     var p=S.current.pts, n=p.length;
     if(n>=2) paint({tool:S.current.tool, color:S.current.color, pts:[p[n-2],p[n-1]]});
@@ -668,6 +670,8 @@
   document.getElementById('sbsAnnoErase').addEventListener('click', function(){ S.tool=S.tool==='erase'?'pen':'erase'; clearToolActive(); if(S.tool==='erase') this.classList.add('active'); });
   document.getElementById('sbsAnnoUndo').addEventListener('click', function(){ S.strokes.pop(); redraw(); });
   document.getElementById('sbsAnnoClear').addEventListener('click', function(){ S.strokes=[]; redraw(); });
+  var finger=document.getElementById('sbsAnnoFinger');
+  finger.addEventListener('click', function(){ S.fingerDraws=!S.fingerDraws; finger.classList.toggle('active',S.fingerDraws); finger.title = S.fingerDraws?'Finger draw is ON — tap to write; tap this to turn off':'Finger draw is OFF — tap this to write with your finger'; });
 
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', function(){ setTimeout(resize,300); });
