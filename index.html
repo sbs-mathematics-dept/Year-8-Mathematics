@@ -644,6 +644,25 @@
     e.preventDefault();
   }
   function up(){ if(!S.drawing) return; S.drawing=false; if(S.current && S.current.pts.length) S.strokes.push(S.current); S.current=null; redraw(); }
+  // Stop the page from scrolling while the Pencil draws. iOS tags Apple Pencil
+  // touches as 'stylus', so we cancel ONLY those (and finger touches when the
+  // hand tool is on). Normal finger scrolling and tapping is left untouched.
+  function sbsIsDrawTouch(t){
+    if(!S.on) return false;
+    if(t.touchType==='stylus') return true;           // Apple Pencil
+    if(S.fingerDraws && t.touchType!=='stylus') return true;  // hand tool on
+    return false;
+  }
+  function sbsTouch(e){
+    if(!S.on) return;
+    if(e.target && e.target.closest && e.target.closest('#sbsAnnoBar')) return;
+    for(var i=0;i<e.changedTouches.length;i++){
+      if(sbsIsDrawTouch(e.changedTouches[i])){ e.preventDefault(); return; }
+    }
+  }
+  window.addEventListener('touchstart', sbsTouch, {capture:true, passive:false});
+  window.addEventListener('touchmove',  sbsTouch, {capture:true, passive:false});
+
   window.addEventListener('pointerdown', down, {capture:true, passive:false});
   window.addEventListener('pointermove', move, {capture:true, passive:false});
   window.addEventListener('pointerup', up, {capture:true});
@@ -651,15 +670,26 @@
   // stop the Pencil's own tap from also triggering page controls while drawing
   window.addEventListener('click', function(e){ if(swallowClick){ e.preventDefault(); e.stopPropagation(); swallowClick=false; } }, {capture:true});
 
-  // Fix deck tap-to-advance stealing reveal-card taps: the deck skips advancing
-  // when the click's default was prevented, so we preventDefault on interactive
-  // widgets (reveal cards, tiles, chips, drop-zones, flip cards). The widgets'
-  // own reveal/toggle handlers still run — preventDefault doesn't stop them.
-  var SBS_NOADV='.rcard,.tile,.chip,.chipm,.dz,.flip,[data-reveal],[data-match]';
-  window.addEventListener('click', function(e){
-    var t=e.target;
-    if(t && t.closest && t.closest(SBS_NOADV)) e.preventDefault();
-  }, {capture:true});
+  // Stop the deck's tap-to-advance from stealing taps on slide widgets.
+  // The deck already skips advancing when the tapped element looks interactive
+  // (its list includes [role="button"]). So we just MARK the widgets as buttons.
+  // We do NOT cancel the tap — that would break checkboxes, labels, drag targets
+  // and other native behaviour. Marking is completely passive.
+  var SBS_WIDGETS='.rcard,.tile,.chip,.chipm,.dz,.flip,[data-reveal],[data-match]';
+  function sbsMark(){
+    try{
+      var els=document.querySelectorAll(SBS_WIDGETS);
+      for(var i=0;i<els.length;i++){
+        var el=els[i];
+        if(el.closest('#sbsAnnoBar')) continue;
+        if(!el.hasAttribute('role')) el.setAttribute('role','button');
+      }
+    }catch(err){}
+  }
+  sbsMark();
+  // slides render/change after load, so keep marking new ones
+  try{ new MutationObserver(sbsMark).observe(document.body,{childList:true,subtree:true}); }catch(err){}
+  [300,900,2000,4000].forEach(function(ms){ setTimeout(sbsMark, ms); });
 
   var bar=document.getElementById('sbsAnnoBar');
   var power=document.getElementById('sbsAnnoPower');
